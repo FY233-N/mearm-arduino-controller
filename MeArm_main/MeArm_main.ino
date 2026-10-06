@@ -14,9 +14,9 @@ const int clawMax = 100;
 
 Servo servoArr[4];//————————————————舵机数列
 int servoPin[] = {11, 10, 9, 6};//——舵机连接引脚数列
-int interval_time = 5;//————————————舵机每转动 1° 的间隔时间，默认为5ms（快）  
+int DSD = 5;//————————————舵机每转动 1° 的间隔时间，默认为5ms（快）  
 
-void Servo_Control (int index, int pos, int time)//对舵机角度直接控制
+void Servo_Control (int index, int pos, int time)//对舵机角度直接控制，运行时最根本的函数
 {
   switch(index)//检测角度是否越界
   {
@@ -66,7 +66,7 @@ void Servo_Control (int index, int pos, int time)//对舵机角度直接控制
       break;
   }
 
-  if (servoArr[index].read() < pos)//角度变化
+  if (servoArr[index].read() < pos)//对比初始角度与目标角度大小，角度转动
   {
     for (int i = servoArr[index].read(); i <= pos; i++)
     { 
@@ -85,7 +85,7 @@ void Servo_Control (int index, int pos, int time)//对舵机角度直接控制
   
 }
 
-void armDataCmd (Servo servoArr[],char name, int time)//通过串口通信，控制各个舵机
+void armDataCmd (char name, int time)//通过串口通信，控制各个舵机
 {
   int pos = Serial.parseInt();
 
@@ -117,12 +117,12 @@ int Speed_Control (char SerialCmd)//速度控制，返回间隔时间——5（H
       return 15;
     default:
       Serial.println("!speed ERROR!");
-      return interval_time;
+      return DSD;
   }
 
 }
 
-void Claw_Control  (char command, int time)//爪控制
+void Claw_Control  (char command, int time)//爪部控制————开（O）；关（S）
 {
   int pos;
   switch (command)
@@ -137,16 +137,49 @@ void Claw_Control  (char command, int time)//爪控制
       break;
   }
 
-  Servo_Control(3, pos, interval_time);
+  Servo_Control(3, pos, DSD);
   
 }
 
-void restore()
+void restore()//舵机复位函数————四个舵机全部转回初始角度（90°）
 {
+  Serial.println("+++++++++++++++++++++++++++++++++++++++");
   for (int i = 0; i < 4; i++)
   {
-    Servo_Control(i, 90, 5);
+    Servo_Control(i, 90, DSD);
     delay(50);
+  }
+  Serial.println("+++++++++++++++++++++++++++++++++++++++");
+}
+
+void MeArm_Control (char character, int DSD)//行为指令调用函数————接收串口指令，调用相应的复杂动作、功能函数（舵机转动、爪部开合、复位、移物等）
+{
+  switch (character)
+  {
+    case 'x'://前臂舵机
+      armDataCmd (character, DSD);
+      break;
+
+    case 'y'://后臂舵机
+      armDataCmd (character, DSD);
+      break;
+      
+    case 'z'://底盘舵机
+      armDataCmd (character, DSD);
+      break;
+      
+    case 'O'://爪开
+      Claw_Control(character, DSD);
+      break;
+    
+    case 'S'://爪关
+      Claw_Control(character, DSD);
+      break;
+
+    case 'I'://复位
+      restore();
+      break;
+    
   }
 }
 
@@ -155,7 +188,7 @@ void setup() {
   {
     servoArr[i].attach(servoPin[i]);
     servoArr[i].write(90);
-    delay(200);
+    delay(10);
   }
   
   Serial.begin(9600);
@@ -167,22 +200,15 @@ void loop() {
   if (Serial.available() > 0)
   {
     character = Serial.read();
-    if (character=='x'||character=='y'||character=='z')
+    if (character=='x'||character=='y'||character=='z'||character == 'O'||character == 'S'||character == 'I')
     {
-      armDataCmd (servoArr, character, interval_time);
+      MeArm_Control(character, DSD);
     }
     else if (character == 'H' || character == 'L')
     {
-      interval_time = Speed_Control(character);
+      DSD = Speed_Control(character);
     }
-    else if (character == 'O' || character == 'S')
-    {
-      Claw_Control(character, interval_time);
-    }
-    else if (character == 'I')
-    {
-      restore();
-    }
+   
   }
   delay(10);
 }
