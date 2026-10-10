@@ -132,9 +132,7 @@ void setup() {
   }
   servoArr[3].write(60);
 
-  pinMode(13, INPUT_PULLUP);
-  pinMode(3, INPUT_PULLUP);
-  pinMode(12, INPUT_PULLUP);
+  
   Serial.begin(9600);
   Serial.println(F("control your servo."));
 }

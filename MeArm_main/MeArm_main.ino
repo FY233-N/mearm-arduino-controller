@@ -4,8 +4,7 @@
 
 Servo servoArr[4];//————————————————舵机数列
 byte DSD = 5;//——————————————————————舵机每转动 1° 的间隔时间，默认为5ms（快）
-byte mode = 0;//—————————————————————模式0：指令模式；1：手柄模式；  
-char Movement[1000];
+byte mode = 1;//—————————————————————模式1：手柄模式；模式2：录制；模式3：播放  
 
 void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制，运行时最根本的函数
 {
@@ -55,6 +54,10 @@ void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制
       Serial.print(F("Servo:fArm  posision = "));
       Serial.println(pos);
       break;
+    case 3:
+      Serial.print(F("Servo:claw  posision = "));
+      Serial.println(pos);
+      break;
   }
 
   if (servoArr[index].read() < pos)//对比初始角度与目标角度大小，角度转动
@@ -76,74 +79,16 @@ void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制
   
 }
 
-void Claw_Control  (char command, byte time)//爪部控制————开（O）；关（S）
-{
-  int pos;
-  switch (command)
-  {
-    case 'O':
-      pos = 25;
-      Serial.println(F("Claw : Open"));
-      break;
-    case 'S':
-      pos = 100;
-      Serial.println(F("Claw : Close"));
-      break;
-  }
-
-  Servo_Control(3, pos, DSD);
-  
-}
-
-void restore()//舵机复位函数————四个舵机全部转回初始角度（90°）
+void restore()//舵机复位函数————四个舵机全部转回初始角度（90、60）
 {
   Serial.println(F("+++++++++++++++++++++++++++++++++++++++"));
-  for (int i = 0; i < 4; i++)
+  for (int i = 0; i < 3; i++)
   {
     Servo_Control(i, 90, DSD);
     delay(50);
   }
+  Servo_Control(3, 60, DSD);
   Serial.println(F("+++++++++++++++++++++++++++++++++++++++"));
-}
-
-void MeArm_Control (char character, byte DSD)//行为指令调用函数————接收串口指令，调用相应的复杂动作、功能函数（舵机转动、爪部开合、复位、移物等）
-{
-  switch (character)
-  {
-    case 'x'://前臂舵机
-      Servo_Control(2, Serial.parseInt(), DSD);
-      break;
-
-    case 'y'://后臂舵机
-      Servo_Control(1, Serial.parseInt(), DSD);
-      break;
-      
-    case 'z'://底盘舵机
-      Servo_Control(0, Serial.parseInt(), DSD);
-      break;
-      
-    case 'O'://爪开
-      Claw_Control(character, DSD);
-      break;
-    
-    case 'S'://爪关
-      Claw_Control(character, DSD);
-      break;
-
-    case 'I'://复位
-      restore();
-      break;
-    
-    case 'm'://切换至手柄模式
-      mode = 1;
-      Serial.println(F("Command: Switch to Joy-Stick Mode."));
-      break;
-
-    case 'r'://查看所有舵机目前角度
-      report();
-      break;
-
-  }
 }
 
 void report()
@@ -160,223 +105,181 @@ void report()
   Serial.println(F("+++++++++++++++++++++++++++++++++++++++"));
 }
 
-void armJoyCmd(char serialCmd)//键盘模拟手柄控制
+void armJoyCmd()//手柄控制
 {
-  if (serialCmd == 'x' || serialCmd == 'y' || serialCmd == 'z' || serialCmd == 'O' || serialCmd == 'S' )
+  byte step = 3;
+  if (mode == 1) 
   {
-    Serial.println(F("Warning: Robot in Joy-Stick Mode..."));
-    delay(100);
-    while(Serial.available()>0) Serial.read();  //清除串口缓存的错误指令
-    return;
+    step = 3;
+    DSD = 5;
+  }
+  else 
+  {
+    step = 5;
+    DSD = 3;
   }
 
-  switch (serialCmd)
+  if (analogRead(A0) > 512+50)//base向左
   {
-    case 'I'://复位
-      restore();
-      break;
-
-    case 'r'://查看所有舵机目前角度
-      report();
-      break;
-      
-    case 'a'://base向左
-      Serial.println(F("Base Turn Left")); 
-      Servo_Control(0, servoArr[0].read() - 3, DSD);
-      break;
-
-    case 'd'://base向右
-      Serial.println(F("Base Turn Right"));                
-      Servo_Control(0, servoArr[0].read() + 3, DSD);
-      break;
-
-    case 's'://rArm向下
-      Serial.println(F("Rear Arm Down"));
-      Servo_Control(1, servoArr[1].read() + 3, DSD);
-      break;
-
-    case 'w'://rArm向下
-      Serial.println(F("Rear Arm Up"));
-      Servo_Control(1, servoArr[1].read() - 3, DSD);
-      break;
-
-    case '8'://fArm向上
-      Serial.println(F("Front Arm Up"));
-      Servo_Control(2, servoArr[2].read() + 3, DSD);
-      break;
-
-    case '5'://fArm向下
-      Serial.println(F("Front Arm Down"));
-      Servo_Control(2, servoArr[2].read() - 3, DSD);
-      break;
-
-    case '4'://Claw关闭
-      Serial.println(F("Claw Close"));
-      Servo_Control(3, servoArr[3].read() + 3, DSD);
-      break;
-
-    case '6'://Claw打开
-      Serial.println(F("Claw Open"));
-      Servo_Control(3, servoArr[3].read() - 3, DSD);
-      break;
-
-    case 'H'://提速
-      DSD = 5;
-      Serial.println(F("speed : HIGH"));
-      break;
-
-    case 'L'://降速
-      DSD = 15;
-      Serial.println(F("speed : LOW"));
-      break;
-    
-    case 'm'://切换至指令模式
-      Serial.println(F("Command: Switch to Instruction Mode."));
-      mode = 0;
-      break;
-    
+    Servo_Control(0, servoArr[0].read() - step, DSD);
   }
+  if (analogRead(A0) < 512-50)//base向右
+  {            
+    Servo_Control(0, servoArr[0].read() + step, DSD);
+  }
+  if (analogRead(A1) < 512-50)//rArm向下
+  {
+    Servo_Control(1, servoArr[1].read() + step, DSD);
+  }
+  if (analogRead(A1) > 512+50)//rArm向上
+  {  
+    Servo_Control(1, servoArr[1].read() - step, DSD);
+  }
+  if (analogRead(A3) > 512+50)//fArm向上
+  {
+    Servo_Control(2, servoArr[2].read() + step, DSD);
+  }
+  if (analogRead(A3) < 512-50)//fArm向下
+  {
+    Servo_Control(2, servoArr[2].read() - step, DSD);
+  } 
+  if (analogRead(A2) > 512+50)//Claw关闭
+  {
+    Servo_Control(3, servoArr[3].read() + step, DSD);
+  }
+  if (analogRead(A2) < 512-50)//Claw打开
+  { 
+    Servo_Control(3, servoArr[3].read() - step, DSD);
+  }
+  if (digitalRead(5) == LOW)//复位
+  {
+    restore();
+    delay(50);
+  } 
 }
 
-byte clawpos;
-byte fArmpos;
-byte rArmpos;
-byte basepos;
+typedef struct Frame
+{
+  byte base;
+  byte rArm;
+  byte fArm;
+  byte claw;
+} Frame;
+
+Frame motionBuffer[300];
+int total_time;
 
 void Record()
 {
-  clawpos = servoArr[3].read();
-  fArmpos = servoArr[2].read();
-  rArmpos = servoArr[1].read();
-  basepos = servoArr[0].read();
-  
+  delay(50);
   Serial.println();
-  Serial.println(F("Command: Switch to Record Mode."));
+  Serial.println(F("切换录制模式，录制中…"));
   int time = 0;
-  while(mode == 2)//循环记录手柄操作
+  while(mode == 2)//循环记录舵机角度
   {
-    char command = 0;
-    if (Serial.available() > 0)
+    if (digitalRead(4) == LOW)
     {
-      command = Serial.read();
-
-      if (command == 'k')
-      {
-        mode = 1;//再次按下k，结束录制，回到手柄模式
-        Movement[time] = '\0';
-        while(Serial.available()>0) Serial.read();//清空串口残留数据
-        Serial.println();
-        Serial.println(F("Command: Leave Record Mode."));
-        Serial.println(F("Command: Switch to Joy-Stick Mode."));
-        return;
-      }
-      armJoyCmd(command);
-    }
-    if (time >= 998)
-    {
-      mode = 1;//再次按下k，结束录制，回到手柄模式
-      Movement[time] = '/';
+      mode = 1;//再次按下按键，结束录制，回到手柄模式
+      total_time = time;
       while(Serial.available()>0) Serial.read();//清空串口残留数据
       Serial.println();
-      Serial.println(F("Command: Leave Record Mode."));
-      Serial.println(F("Command: Switch to Joy-Stick Mode."));
+      Serial.println(F("结束录制"));
+      delay(500);
+      Serial.println(F("切换手柄模式"));
+      return;
+    }
+    armJoyCmd();
+  
+    if (time >= 298)
+    {
+      mode = 1;
+      total_time = time;
+      while(Serial.available()>0) Serial.read();//清空串口残留数据
+      Serial.println();
+      Serial.println(F("结束录制(录制已满)"));
+      delay(500);
+      Serial.println(F("切换手柄模式"));
       return;
     }
 
-    Movement[time] = command;
+    motionBuffer[time].base = servoArr[0].read();
+    motionBuffer[time].rArm = servoArr[1].read();
+    motionBuffer[time].fArm = servoArr[2].read();
+    motionBuffer[time].claw = servoArr[3].read();
+
     time++;
-    delay(20);
+    delay(50);
   }
 }
 
-void Play_Vedio()
+void play_motion()
 {
   while(Serial.available()>0) Serial.read(); //播放前清空串口缓存
-  Servo_Control(3, clawpos, 5);
-  Servo_Control(2, fArmpos, 5);
-  Servo_Control(1, rArmpos, 5);
-  Servo_Control(0, basepos, 5);
-  Serial.println(F("Play Starts."));
-  for (int i = 0; i < 1000; i++)
+  Servo_Control(3, motionBuffer[0].claw, 5);
+  Servo_Control(2, motionBuffer[0].fArm, 5);
+  Servo_Control(1, motionBuffer[0].rArm, 5);
+  Servo_Control(0, motionBuffer[0].base, 5);
+  delay(50);
+  Serial.println(F("播放开始"));
+  for (int i = 0; i < total_time; i++)
   {
-    if (Movement[i] == '/')
-    {
-      mode = 1;//切换摇杆模式
-      Serial.println();
-      Serial.println(F("Playback Finished."));
-      return;
-    }
-
-    armJoyCmd(Movement[i]);
-    delay(20);
+    Servo_Control(3, motionBuffer[i].claw, 5);
+    Servo_Control(2, motionBuffer[i].fArm, 5);
+    Servo_Control(1, motionBuffer[i].rArm, 5);
+    Servo_Control(0, motionBuffer[i].base, 5);
+    delay(50);
   }
   mode = 1;
-  Serial.println(F("Playback Finished."));
+  Serial.println(F("播放结束"));
+  Serial.println(F("切换摇杆模式"));
 }
 
 void setup() {
-    servoArr[0].attach(11);
-    servoArr[1].attach(10);
-    servoArr[2].attach(9);
-    servoArr[3].attach(6);
+  servoArr[0].attach(9);
+  servoArr[1].attach(8);
+  servoArr[2].attach(7);
+  servoArr[3].attach(6);
 
-    for (short i = 0; i < 4; i++)
-    {
-      servoArr[i].write(90);
-      delay(10);
-    }
-  
+  for (short i = 0; i < 3; i++)
+  {
+    servoArr[i].write(90);
+    delay(10);
+  }
+  servoArr[3].write(60);
+
+  pinMode(4, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
+  pinMode(12, INPUT_PULLUP);
   Serial.begin(9600);
   Serial.println(F("control your servo."));
 }
 
 void loop() {
-  char character = 0;
-  if (Serial.available() > 0)
+  if (mode == 1)
   {
-    character = Serial.read();
-    if (character == 'k')
+    armJoyCmd();
+    if (digitalRead(4) == LOW)
     {
-      mode = 2;//切换录制模式
+      Serial.println(F("切换录制模式"));
+      delay(500);
+      mode = 2;
     }
-    else if (character == 'l')
+    if (digitalRead(12) == LOW)
     {
-      mode = 3;//切换播放模式
+      Serial.println(F("切换播放模式"));
+      delay(500);
+      mode = 3;
     }
+  }
 
-    switch (mode)
-    {
-      case 0://指令
-        if (character == 'H')
-        {
-          DSD = 5;
-          Serial.println(F("speed : HIGH"));
-        }
-        else if (character == 'L')
-        {
-          DSD = 15;
-          Serial.println(F("speed : LOW"));
-        }
-        else
-        {
-          MeArm_Control(character, DSD);
-        }
-        break;
+  if (mode == 2)
+  {
+    Record();
+  }
 
-      case 1://手柄
-        armJoyCmd(character);
-        break;
-
-      case 2://录制
-        Record();
-        break;
-    
-      case 3://播放
-        Play_Vedio();
-        break;
-
-    }
-    character = 0;
+  if (mode == 3)
+  {
+    play_motion();
   }
   delay(10);
 }
