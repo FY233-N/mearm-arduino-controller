@@ -1,4 +1,5 @@
 #include <Servo.h>
+#include <math.h>
 
 //Servo base(0,z), rArm(1,y), fArm(2,x), claw(3);
 
@@ -6,33 +7,51 @@ Servo servoArr[4];//————————————————舵机数列
 byte DSD = 5;//——————————————————————舵机每转动 1° 的间隔时间，默认为5ms（快）
 byte mode = 1;//—————————————————————模式1：手柄模式；模式2：录制；模式3：播放  
 
+const double h     = 40.0;    // 底座高度
+const double len1  = 80.0;    // 后臂杆长
+const double len2  = 80.0;    // 前臂杆长
+const double len3  = 30.0;    // 爪子长度
+
+// 各舵机硬件物理限位
+const double BASE_MIN  = 0.0;
+const double BASE_MAX  = 180.0;
+const double RARM_MIN  = 15.0;
+const double RARM_MAX  = 180.0;
+const double FARM_MIN  = 15.0;
+const double FARM_MAX  = 135.0;
+
+// 最终计算结果
+double calcC0 = 0.0;
+double calcC1 = 0.0;
+double calcC2 = 0.0;
+
 void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制，运行时最根本的函数
 {
   switch(index)//检测角度是否越界
   {
     case 0://base
-      if (pos > 180||pos < 0)
+      if (pos > BASE_MAX||pos < BASE_MIN)
       {
         Serial.println(F("Warning:Base Servo Value Out Of Range!"));
         return;
       }
       break;
     case 1://rArm
-      if (pos > 180||pos < 45)
+      if (pos > RARM_MAX||pos < RARM_MIN)
       {
         Serial.println(F("Warning:rArm Servo Value Out Of Range!"));
         return;
       }
       break;
     case 2://fArm
-      if (pos > 120||pos < 35)
+      if (pos > FARM_MAX||pos < FARM_MIN)
       {
         Serial.println(F("Warning:fArm Servo Value Out Of Range!"));
         return;
       }
       break;
     case 3://claw
-      if (pos > 100||pos < 25)
+      if (pos > 80||pos < 0)
       {
         Serial.println(F("Warning:Claw Servo Value Out Of Range!"));
         return;
@@ -155,7 +174,30 @@ void armJoyCmd()//手柄控制
   {
     restore();
     delay(50);
-  } 
+  }
+  if (digitalRead(10) == LOW)//循环拿物
+  {
+    //拿物函数
+    delay(50);
+  }
+  if (digitalRead(4) == LOW)//录制
+  {
+    Serial.println(F("切换录制模式"));
+    delay(500);
+    mode = 2;
+  }
+  if (digitalRead(12) == LOW)//播放
+  {
+    Serial.println(F("切换播放模式"));
+    delay(500);
+    mode = 3;
+  }
+  if (digitalRead(2) == LOW)//画线
+  {
+    Serial.println(F("切换画线模式"));
+    delay(500);
+    mode = 4;
+  }
 }
 
 typedef struct Frame
@@ -234,10 +276,143 @@ void play_motion()
   Serial.println(F("切换摇杆模式"));
 }
 
+int armMoveTo(double X, double Y, double Z)//运动学逆解
+{
+  //求解底座舵机 C0
+  double S = sqrt(X*X + Y*Y);
+  if(S < 1e-6)
+  {
+      S = 1e-6;
+  }
+  double C0_rad = atan2(Y, -X);
+  double C0_deg = 180.0 / M_PI * C0_rad;
+  if(C0_deg < -180.0) C0_deg += 360.0;
+  if(C0_deg > 180.0) C0_deg -= 360.0;
+
+  if(C0_deg < BASE_MIN || C0_deg > BASE_MAX)
+  {
+    return -2;
+  }
+
+  //求解竖直平面参数 U V K
+  double U = len3 - S;
+  double V = Z - h;
+  double K_numerator = len1*len1 + len2*len2 - (U*U + V*V);
+  double K = K_numerator / (2.0 * len1 * len2);
+  if(K < -1.0 || K > 1.0)
+  {
+    return -1;
+  }
+
+  double R1 = asin(K);
+  double R2 = M_PI - R1;
+  bool solValid = false;
+  double goodC1_rad = 0.0;
+  double goodC2_rad = 0.0;
+
+  //遍历解 R1、R2，优先尝试R1
+  {
+    double R = R1;
+    double A = len1 - len2 * sin(R);
+    double B = len2 * cos(R);
+    double denom = A*A + B*B;
+    if(fabs(denom) > 1e-6)
+    {
+      double sinC1 = (A * V + B * U) / denom;
+      double cosC1 = (A * U - B * V) / denom;
+      if(sinC1 >  1.0) sinC1 = 1.0;
+      if(sinC1 < -1.0) sinC1 = -1.0;
+      if(cosC1 >  1.0) cosC1 = 1.0;
+      if(cosC1 < -1.0) cosC1 = -1.0;
+
+      double C1_rad = atan2(sinC1, cosC1);
+      double C2_rad = R - C1_rad;
+
+      double c1d = 180.0 / M_PI * C1_rad;
+      double c2d = 180.0 / M_PI * C2_rad;
+
+      if( c1d >= RARM_MIN && c1d <= RARM_MAX &&
+          c2d >= FARM_MIN && c2d <= FARM_MAX )
+      {
+        solValid = true;
+        goodC1_rad = C1_rad;
+        goodC2_rad = C2_rad;
+      }
+    }
+  }
+
+  //R1无效尝试R2解
+  if(!solValid)
+  {
+    double R = R2;
+    double A = len1 - len2 * sin(R);
+    double B = len2 * cos(R);
+    double denom = A*A + B*B;
+    if(fabs(denom) > 1e-6)
+    {
+      double sinC1 = (A * V + B * U) / denom;
+      double cosC1 = (A * U - B * V) / denom;
+      if(sinC1 >  1.0) sinC1 = 1.0;
+      if(sinC1 < -1.0) sinC1 = -1.0;
+      if(cosC1 >  1.0) cosC1 = 1.0;
+      if(cosC1 < -1.0) cosC1 = -1.0;
+
+      double C1_rad = atan2(sinC1, cosC1);
+      double C2_rad = R - C1_rad;
+
+      double c1d = 180.0 / M_PI * C1_rad;
+      double c2d = 180.0 / M_PI * C2_rad;
+
+      if( c1d >= RARM_MIN && c1d <= RARM_MAX &&
+          c2d >= FARM_MIN && c2d <= FARM_MAX )
+      {
+        solValid = true;
+        goodC1_rad = C1_rad;
+        goodC2_rad = C2_rad;
+      }
+    }
+  }
+
+  if(!solValid)
+  {
+      return -3;
+  }
+
+  //输出舵机角度
+  calcC0 = C0_deg;
+  calcC1 = 180.0 / M_PI * goodC1_rad;
+  calcC2 = 180.0 / M_PI * goodC2_rad;
+
+  int t0 = (int)round(calcC0);
+  int t1 = (int)round(calcC1);
+  int t2 = (int)round(calcC2);
+
+  Servo_Control(0, t0, 1);
+  Servo_Control(1, t1, 1);
+  Servo_Control(2, t2, 1);
+
+  return 0;
+}
+
+void write_line()//画直线
+{
+  for (double i = -70.0; i < 70.1; i += 2.0)
+    {
+      int ret = armMoveTo(i, 120.0, 40.0);
+      if (ret != 0)
+      {
+        Serial.print("IK error ret=");
+        Serial.println(ret);
+      }
+      
+    }
+    delay(500);
+}
+
 void setup() {
-  servoArr[0].attach(9);
-  servoArr[1].attach(8);
-  servoArr[2].attach(7);
+  servoArr[0].attach(11);
+  servoArr[1].attach(10);
+  servoArr[2].attach(9);
   servoArr[3].attach(6);
 
   for (short i = 0; i < 3; i++)
@@ -247,9 +422,11 @@ void setup() {
   }
   servoArr[3].write(60);
 
-  pinMode(4, INPUT_PULLUP);
-  pinMode(5, INPUT_PULLUP);
-  pinMode(12, INPUT_PULLUP);
+  pinMode(4, INPUT_PULLUP);//录制
+  pinMode(5, INPUT_PULLUP);//复位
+  pinMode(13, INPUT_PULLUP);//循环拿物
+  pinMode(12, INPUT_PULLUP);//播放
+  pinMode(2, INPUT_PULLUP);//切换坐标模式
   Serial.begin(9600);
   Serial.println(F("control your servo."));
 }
@@ -258,18 +435,6 @@ void loop() {
   if (mode == 1)
   {
     armJoyCmd();
-    if (digitalRead(4) == LOW)
-    {
-      Serial.println(F("切换录制模式"));
-      delay(500);
-      mode = 2;
-    }
-    if (digitalRead(12) == LOW)
-    {
-      Serial.println(F("切换播放模式"));
-      delay(500);
-      mode = 3;
-    }
   }
 
   if (mode == 2)
@@ -280,6 +445,22 @@ void loop() {
   if (mode == 3)
   {
     play_motion();
+  }
+
+  if (mode == 4)
+  {
+    if (digitalRead(2) == LOW)//手柄
+    {
+      Serial.println(F("切换手柄模式"));
+      delay(500);
+      mode = 1;
+    }
+    if (digitalRead(4) == LOW)//直线
+    {
+      write_line();
+      delay(100);
+    }
+    
   }
   delay(10);
 }
