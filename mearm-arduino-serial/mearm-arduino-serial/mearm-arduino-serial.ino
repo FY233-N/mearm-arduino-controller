@@ -1,6 +1,6 @@
 #include <Servo.h>
 
-//Servo base(0,z), fArm(1,y), rArm(2,x), claw(3);
+//Servo base(0,z), rArm(1,y), fArm(2,x), claw(3);
 
 Servo servoArr[4];//————————————————舵机数列
 byte DSD = 5;//——————————————————————舵机每转动 1° 的间隔时间，默认为5ms（快）
@@ -16,22 +16,22 @@ void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制
         return;
       }
       break;
-    case 1://fArm
-      if (pos > 135||pos < 15)
+    case 1://rArm
+      if (pos > 180||pos < 45)
       {
         Serial.println(F("Warning:rArm Servo Value Out Of Range!"));
         return;
       }
       break;
-    case 2://rArm
-      if (pos > 180||pos < 30)
+    case 2://fArm
+      if (pos > 120||pos < 35)
       {
         Serial.println(F("Warning:fArm Servo Value Out Of Range!"));
         return;
       }
       break;
     case 3://claw
-      if (pos > 80||pos < 0)
+      if (pos > 100||pos < 25)
       {
         Serial.println(F("Warning:Claw Servo Value Out Of Range!"));
         return;
@@ -51,10 +51,6 @@ void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制
       break;
     case 2:
       Serial.print(F("Servo:fArm  posision = "));
-      Serial.println(pos);
-      break;
-    case 3:
-      Serial.print(F("Servo:claw  posision = "));
       Serial.println(pos);
       break;
   }
@@ -84,11 +80,11 @@ void Claw_Control  (char command, byte time)//爪部控制————开（O）
   switch (command)
   {
     case 'O':
-      pos = 0;
+      pos = 25;
       Serial.println(F("Claw : Open"));
       break;
     case 'S':
-      pos = 80;
+      pos = 100;
       Serial.println(F("Claw : Close"));
       break;
   }
@@ -120,42 +116,46 @@ void MeArm_Control (char character, byte DSD)//行为指令调用函数———
     case 'S'://爪关
       Claw_Control(character, DSD);
       break;
-    
-    case 'R':
-      restore();
-      break;
   }
 }
-
-void restore()//舵机复位函数————四个舵机全部转回初始角度（90、60）
-{
-  Serial.println(F("+++++++++++++++++++++++++++++++++++++++"));
-  for (int i = 0; i < 3; i++)
-  {
-    Servo_Control(i, 90, DSD);
-    delay(50);
-  }
-  Servo_Control(3, 60, DSD);
-  Serial.println(F("+++++++++++++++++++++++++++++++++++++++"));
-}
-
 void setup() {
   // put your setup code here, to run once:
-  servoArr[0].attach(9);
-  servoArr[1].attach(7);
-  servoArr[2].attach(8);
+  servoArr[0].attach(11);
+  servoArr[1].attach(10);
+  servoArr[2].attach(9);
   servoArr[3].attach(6);
 
   for (short i = 0; i < 3; i++)
   {
-    Servo_Control(i, 90, DSD);
+    servoArr[i].write(90);
     delay(10);
   }
   servoArr[3].write(60);
 
-  
+  pinMode(13, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+  pinMode(12, INPUT_PULLUP);
   Serial.begin(9600);
   Serial.println(F("control your servo."));
+}
+
+void pick(char name)
+{
+  switch (name)
+  {
+    case 'A':
+
+      break;
+
+    case 'B':
+
+      break;
+
+    case 'C':
+
+      break;
+
+  }
 }
 
 void loop() {
@@ -173,6 +173,11 @@ void loop() {
     {
       DSD = 15;
       Serial.println("速度：慢");
+    }
+    else if (character == 'A' || character == 'B' || character == 'C')
+    {
+      pick(character);
+      Serial.println("取物");
     }
     else
     {
