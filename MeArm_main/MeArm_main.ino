@@ -9,7 +9,7 @@
 
 Servo servoArr[4];//————————————————舵机数列
 byte DSD = 5;//——————————————————————舵机每转动 1° 的间隔时间，默认为5ms（快）
-byte mode = 1;//—————————————————————模式1：手柄模式；模式2：录制；模式3：播放  
+byte mode = 0;//—————————————————————模式1：手柄模式；模式2：录制；模式3：播放  
 
 const double h     = 61.0;    // 底座高度
 const double len1  = 80.0;    // 后臂杆长
@@ -22,9 +22,9 @@ const double BASE_MAX  = 180.0;
 const double RARM_MIN  = 5.0;
 const double RARM_MAX  = 165.0;
 const double FARM_MIN  = 0.0;
-const double FARM_MAX  = 125.0;
+const double FARM_MAX  = 137.0;
 const int CLAW_MIN = 0;
-const int CLAW_MAX = 150;
+const int CLAW_MAX = 100;
 
 // 最终计算结果
 double calcC0 = 0.0;
@@ -84,14 +84,12 @@ void Servo_Control (byte index, int pos, byte time)//对舵机角度直接控制
   
 }
 
-void restore()//舵机复位函数————四个舵机全部转回初始角度（90、60）
+void restore()//舵机复位函数————四个舵机全部转回初始角度（90、110、60）
 {
-  for (int i = 0; i < 3; i++)
-  {
-    Servo_Control(i, 90, DSD);
-    delay(50);
-  }
-  Servo_Control(3, 60, DSD);
+  Servo_Control(0, 90, DSD);
+  Servo_Control(1, 80, DSD);
+  Servo_Control(2, 115, DSD);
+  Servo_Control(3, 100, DSD);
 }
 
 void report()
@@ -203,7 +201,7 @@ void Record()
   }
 }
 
-void play_motion()
+void play_motion()//播放
 {
   while(Serial.available()>0) Serial.read(); //播放前清空串口缓存
   Servo_Control(3, motionBuffer[0].claw, 5);
@@ -223,6 +221,64 @@ void play_motion()
   mode = 1;
   Serial.println(F("播放结束"));
   Serial.println(F("切换摇杆模式"));
+}
+
+int object = 0;
+void move_object()//取物函数
+{
+  switch (object)
+  {
+    case 0: //A
+      static const byte arrA[6][4] = 
+      {
+        {10, 156, 49, 0},
+        {10, 156, 49, 100},
+        {10, 80, 115, 100},
+        {62, 80, 115, 100},
+        {62, 156, 49, 100},
+        {62, 156, 49, 50}
+      };
+      for (int i = 0; i < 6; i++)
+      {
+        for (int j = 0; j < 4; j++)
+        {
+          Servo_Control(j, arrA[i][j], DSD+10);
+          delay(50);
+        }
+      }
+      Servo_Control(1, 80, DSD+10);
+      restore();
+      break;
+    case 1: //B
+      static const byte arrB[8][4] = 
+      {
+        {168, 91, 137, 30},
+        {168, 103, 76, 30},
+        {168, 103, 76, 100},
+        {168, 91, 137, 100},
+        {77, 91, 137, 100},
+        {77, 103, 76, 100},
+        {77, 103, 76, 30},
+        {77, 91, 137, 30}
+      };
+      for (int i = 0; i < 8; i++)
+      {
+        for (int j = 0; j < 4; j++)
+        {
+          Servo_Control(j, arrB[i][j], DSD+10);
+          delay(50);
+        }
+      }
+      restore();
+      break;
+
+    case 2: //C
+      break;
+
+  }
+
+  object++;
+  if (object >= 3) object = 0;
 }
 
 // 运动学逆解 armMoveTo(X,Y,Z)
@@ -355,10 +411,10 @@ void forward(double C0, double C1, double C2, double &outX, double &outY, double
 //画直线
 void write_line ()
 {
-  armMoveTo(-60.0, 100.0, 50.0);
-  for (double i = -60.0; i < 60.1; i += 2.0)
+  armMoveTo(0.0, 110.0, 60.0);
+  for (double i = 0.0; i < 20.0; i += 1.0)
   {
-    int ret = armMoveTo(i, 100.0, 40.0);
+    int ret = armMoveTo(0.0, 120.0 - i, 60.0);
     if (ret != 0)
     {
       Serial.print("IK error ret=");
@@ -390,6 +446,8 @@ void write_line ()
       }
     }
   }
+  armMoveTo(0.0, 100.0, 120.0);
+  restore();
   Serial.println("结束");
   delay(100);
 }
@@ -397,11 +455,11 @@ void write_line ()
 //画V字
 void write_V ()
 {
-  armMoveTo(-26.0, 106.0, 50.0);
+  armMoveTo(-30.0, 145.0, 60.0);
 
-  for (double i = -30.0; i < 0; i += 2.0)
+  for (double i = -30.0; i < 0; i += 1.0)
   {
-    int ret = armMoveTo(i, 100.0 - 1.2 * i, 40.0);
+    int ret = armMoveTo(i, 100.0 - 1.5 * i, 60.0);
     if (ret != 0) { Serial.print("IK error ret="); Serial.println(ret); }
 
     if (Serial.available() > 0 && Serial.read() == '2')
@@ -421,11 +479,11 @@ void write_V ()
     }
   }
 
-  delay(10);
+  delay(100);
 
-  for (double i = 0.0; i < 30.1; i += 2.0)
+  for (double i = 0.0; i < 30.1; i += 1.0)
   {
-    int ret = armMoveTo(i, 100.0 + 1.2 * i, 40.0);
+    int ret = armMoveTo(i, 100.0 + 1.5 * i, 60.0);
     if (ret != 0) { Serial.print("IK error ret="); Serial.println(ret); }
 
     if (Serial.available() > 0 && Serial.read() == '2')
@@ -444,6 +502,8 @@ void write_V ()
       }
     }
   }
+  armMoveTo(30.0, 145.0, 120.0);
+  restore();
   Serial.println("结束");
   delay(100);
 }
@@ -484,7 +544,9 @@ void write_fiveLine()
   }
 
   delay(50);
-  restore();
+  Servo_Control(0, 90, DSD);
+  Servo_Control(1, 80, DSD);
+  Servo_Control(2, 115, DSD);
 
   for (int i = 0; i < 5; i++)
   {
@@ -519,6 +581,7 @@ void write_fiveLine()
     double Y_step = dy / (double)step_qty;
     double Z_step = dz / (double)step_qty;
 
+    // j 从 1 到 step_qty，到达目标
     for (int j = 1; j <= step_qty; j++)
     {
       delay(80);
@@ -559,6 +622,106 @@ void write_fiveLine()
   Serial.println("结束");
 }
 
+void move_object_serial(char object)//取物函数
+{
+  switch (object)
+  {
+    case 'A': 
+      static const byte arrA[6][4] = 
+      {
+        {10, 156, 49, 0},
+        {10, 156, 49, 100},
+        {10, 80, 115, 100},
+        {62, 80, 115, 100},
+        {62, 156, 49, 100},
+        {62, 156, 49, 50}
+      };
+      for (int i = 0; i < 6; i++)
+      {
+        for (int j = 0; j < 4; j++)
+        {
+          Servo_Control(j, arrA[i][j], DSD+10);
+          delay(50);
+        }
+      }
+      Servo_Control(1, 80, DSD+10);
+      restore();
+      break;
+    case 'B': 
+      static const byte arrB[8][4] = 
+      {
+        {168, 91, 137, 30},
+        {168, 103, 76, 30},
+        {168, 103, 76, 100},
+        {168, 91, 137, 100},
+        {77, 91, 137, 100},
+        {77, 103, 76, 100},
+        {77, 103, 76, 30},
+        {77, 91, 137, 30}
+      };
+      for (int i = 0; i < 8; i++)
+      {
+        for (int j = 0; j < 4; j++)
+        {
+          Servo_Control(j, arrB[i][j], DSD+10);
+          delay(50);
+        }
+      }
+      restore();
+      break;
+
+    case 'C': 
+      break;
+
+  }
+
+}
+
+void Claw_Control  (char command, byte time)//爪部控制————开（O）；关（S）
+{
+  int pos;
+  switch (command)
+  {
+    case 'O':
+      pos = 25;
+      Serial.println(F("Claw : Open"));
+      break;
+    case 'S':
+      pos = 100;
+      Serial.println(F("Claw : Close"));
+      break;
+  }
+
+  Servo_Control(3, pos, DSD);
+  
+}
+
+void MeArm_Control (char character, byte DSD)//行为指令调用函数————接收串口指令，调用相应的复杂动作、功能函数（舵机转动、爪部开合、复位、移物等）
+{
+  switch (character)
+  {
+    case 'x'://前臂舵机
+      Servo_Control(2, Serial.parseInt(), DSD);
+      break;
+
+    case 'y'://后臂舵机
+      Servo_Control(1, Serial.parseInt(), DSD);
+      break;
+      
+    case 'z'://底盘舵机
+      Servo_Control(0, Serial.parseInt(), DSD);
+      break;
+      
+    case 'O'://爪开
+      Claw_Control(character, DSD);
+      break;
+    
+    case 'S'://爪关
+      Claw_Control(character, DSD);
+      break;
+
+  }
+}
 
 void setup() {
   servoArr[0].attach(9);
@@ -566,13 +729,10 @@ void setup() {
   servoArr[2].attach(8);
   servoArr[3].attach(6);
 
-  for (short i = 0; i < 3; i++)
-  {
-    servoArr[i].write(90);
-    delay(10);
-  }
-  servoArr[3].write(60);
-
+  Servo_Control(0, 90, DSD);
+  Servo_Control(1, 80, DSD);
+  Servo_Control(2, 115, DSD);
+  Servo_Control(3, 100, DSD);
   //10，播放
   //5，复位 / V字
   //4，直线 / 继续 / 录制
@@ -583,6 +743,40 @@ void setup() {
 }
 
 void loop() {
+  if (mode == 0)
+  {
+    char character = 0;
+    if (Serial.available() > 0)
+    {
+      character = Serial.read();
+      if (character == 'H')
+      {
+        DSD = 5;
+        Serial.println("速度：快");
+      }
+      else if (character == 'L')
+      {
+        DSD = 15;
+        Serial.println("速度：慢");
+      }
+      else if (character == 'A' || character == 'B' || character == 'C')
+      {
+        Serial.println("取物");
+        move_object_serial(character);
+      }
+      else if (character == 'm')
+      {
+        mode = 1;
+        Serial.println(F("切换摇杆模式"));
+      }
+      else
+      {
+        MeArm_Control(character, DSD);
+        delay(10);
+      }
+    }
+  }
+
   if (mode == 1)
   {
     armJoyCmd();
@@ -592,7 +786,7 @@ void loop() {
       char c = Serial.read();
       if (c == '3')//循环拿物
       {
-        //拿物函数
+        move_object();
         delay(50);
       }
       if (c == '4')//录制
@@ -616,6 +810,12 @@ void loop() {
       if (c == '5')//复位
       {
         restore();
+        delay(50);
+      }
+      if (c == 'm')//切换串口
+      {
+        mode = 0;
+        Serial.println(F("切换串口模式"));
         delay(50);
       }
     }
@@ -662,5 +862,4 @@ void loop() {
       }
     }
   }
-  
 }
