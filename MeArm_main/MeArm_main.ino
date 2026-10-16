@@ -109,12 +109,7 @@ void report()
 void armJoyCmd()//手柄控制
 {
   byte step = 3;
-  if (mode == 1 || mode == 4) 
-  {
-    step = 3;
-    DSD = 5;
-  }
-  else 
+  if (mode != 1 && mode != 0 && mode != 4) 
   {
     step = 5;
     DSD = 3;
@@ -223,10 +218,10 @@ void play_motion()//播放
   Serial.println(F("切换摇杆模式"));
 }
 
-int object = 0;
+int object1 = 0;
 void move_object()//取物函数
 {
-  switch (object)
+  switch (object1)
   {
     case 0: //A
       static const byte arrA[6][4] = 
@@ -252,14 +247,14 @@ void move_object()//取物函数
     case 1: //B
       static const byte arrB[8][4] = 
       {
-        {168, 91, 137, 30},
-        {168, 103, 76, 30},
-        {168, 103, 76, 100},
-        {168, 91, 137, 100},
-        {77, 91, 137, 100},
-        {77, 103, 76, 100},
-        {77, 103, 76, 30},
-        {77, 91, 137, 30}
+        {2, 80, 115, 0},
+        {2, 148, 23, 0},
+        {2, 148, 23, 100},
+        {2, 80, 115, 100},
+        {178, 80, 115, 100},
+        {178, 148, 23, 100},
+        {178, 148, 23, 0},
+        {178, 80, 115, 0}
       };
       for (int i = 0; i < 8; i++)
       {
@@ -273,12 +268,32 @@ void move_object()//取物函数
       break;
 
     case 2: //C
+      static const byte arrC[8][4] = 
+      {
+        {168, 91, 137, 30},
+        {168, 103, 76, 30},
+        {168, 103, 76, 100},
+        {168, 91, 137, 100},
+        {77, 91, 137, 100},
+        {77, 103, 76, 100},
+        {77, 103, 76, 30},
+        {77, 91, 137, 30}
+      };
+      for (int i = 0; i < 8; i++)
+      {
+        for (int j = 0; j < 4; j++)
+        {
+          Servo_Control(j, arrC[i][j], DSD+10);
+          delay(50);
+        }
+      }
+      restore();
       break;
 
   }
 
-  object++;
-  if (object >= 3) object = 0;
+  object1++;
+  if (object1 >= 3) object1 = 0;
 }
 
 // 运动学逆解 armMoveTo(X,Y,Z)
@@ -671,6 +686,26 @@ void move_object_serial(char object)//取物函数
       break;
 
     case 'C': 
+      static const byte arrC[8][4] = 
+      {
+        {168, 91, 137, 30},
+        {168, 103, 76, 30},
+        {168, 103, 76, 100},
+        {168, 91, 137, 100},
+        {77, 91, 137, 100},
+        {77, 103, 76, 100},
+        {77, 103, 76, 30},
+        {77, 91, 137, 30}
+      };
+      for (int i = 0; i < 8; i++)
+      {
+        for (int j = 0; j < 4; j++)
+        {
+          Servo_Control(j, arrC[i][j], DSD+10);
+          delay(50);
+        }
+      }
+      restore();
       break;
 
   }
